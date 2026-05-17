@@ -72,18 +72,31 @@ bool UinputDevice::initialize() {
 void UinputDevice::send_backspace() {
     if (!guard_.is_valid())
         return;
-    struct input_event ev[4]{};
-    ev[0].type  = EV_KEY;
-    ev[0].code  = KEY_BACKSPACE;
-    ev[0].value = 1; // Press
-    // Zero-initialize ev[1] via {} set this event to SYN_REPORT
-    ev[2].type  = EV_KEY;
-    ev[2].code  = KEY_BACKSPACE;
-    ev[2].value = 0; // Release
-    // Zero-initialize ev[3] via {} set this event to SYN_REPORT
-    write(guard_.get(), ev, sizeof(ev));
-}
 
+    // 1. Gửi sự kiện NHẤN PHÍM (Press) + SYN
+    struct input_event ev_press[2]{};
+    ev_press[0].type  = EV_KEY;
+    ev_press[0].code  = KEY_BACKSPACE;
+    ev_press[0].value = 1; // Press
+    // ev_press[1] tự động được thiết lập thành EV_SYN nhờ khởi tạo bằng {}
+    write(guard_.get(), ev_press, sizeof(ev_press));
+
+    // 2. Tạo độ trễ nhỏ giả lập thời gian giữ phím của con người (khoảng 3ms - 4ms)
+    // Giúp engine JavaScript của trình duyệt (Firefox/Chrome) kịp nhận diện sự kiện keydown
+    usleep(4000); 
+
+    // 3. Gửi sự kiện NHẢ PHÍM (Release) + SYN
+    struct input_event ev_release[2]{};
+    ev_release[0].type  = EV_KEY;
+    ev_release[0].code  = KEY_BACKSPACE;
+    ev_release[0].value = 0; // Release
+    // ev_release[1] tự động được thiết lập thành EV_SYN nhờ khởi tạo bằng {}
+    write(guard_.get(), ev_release, sizeof(ev_release));
+
+    // 4. Cho trình duyệt thêm 2ms để đồng bộ lại con trỏ văn bản 
+    // trước khi cấu trúc Fcitx5 gửi ký tự đã bỏ dấu mới vào
+    usleep(2000);
+}
 LibinputContext::LibinputContext(const struct libinput_interface* interface) : udev_(udev_new()) {
     if (udev_ != nullptr) {
         li_ = libinput_udev_create_context(interface, nullptr, udev_);
